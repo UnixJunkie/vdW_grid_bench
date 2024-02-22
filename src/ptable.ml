@@ -4,10 +4,9 @@
 
 (* periodic table *)
 
-module A = BatArray
-module Log = Dolog.Log
-module ISet = BatSet.Int
-module SMap = BatMap.String
+module A = Array
+module ISet = Set.Make(struct type t = int let compare = compare end)
+module SMap = Map.Make(struct type t = string let compare = compare end)
 
 let all_supported_anums_l = [1; 6; 7; 8; 9; 12; 15; 16; 17; 35; 53]
 let all_supported_anums = ISet.of_list all_supported_anums_l
@@ -54,13 +53,17 @@ let () =
     vdW_radii.(53) <- 2.1 ;
   end
 
+let min_max : float array -> float * float =
+   A.fold_left (fun (mn,mx) x -> ((if x < mn then x else mn), 
+                                  (if x > mx then x else mx)))
+    (max_float,min_float)
+
 (* min/max radii you can encounter in a molecule *)
-let vdW_min = A.min vdW_radii
-let vdW_max = A.max vdW_radii
+let (vdW_min,vdW_max) = min_max vdW_radii
 
 let sym2anu =
   SMap.of_seq
-    (BatSeq.of_list
+    (List.to_seq
        (* currently supported elements *)
        [("C" ,  6);
         ("H" ,  1);
@@ -78,8 +81,7 @@ let sym2anu =
 let anum_of_symbol (elt: string): int =
   try SMap.find elt sym2anu
   with Not_found ->
-    let _ = Log.fatal "Ptable.anum_of_symbol: unsupported element: %s" elt in
-    exit 1
+    Printf.kprintf failwith "Ptable.anum_of_symbol: unsupported element: %s" elt
 
 let symbol_of_anum (anum: int): string =
   A.unsafe_get symbols anum

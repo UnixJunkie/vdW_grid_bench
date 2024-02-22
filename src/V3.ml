@@ -2,7 +2,21 @@
  * Tsuda laboratory, The University of Tokyo,
  * 5-1-5 Kashiwa-no-ha, Kashiwa-shi, Chiba-ken, 277-8561, Japan. *)
 
-include Vector3
+(* inserted the needed parts from Vector3 *)
+type t = {x: float; y:float; z:float}
+
+let make x y z =
+  { x = x ;
+    y = y ;
+    z = z }
+
+let origin =
+  { x = 0. ;
+    y = 0. ;
+    z = 0. }
+
+let to_triplet v =
+  (v.x, v.y, v.z)
 
 (* for a .xyz trajectory file *)
 let xyz_dump out v =

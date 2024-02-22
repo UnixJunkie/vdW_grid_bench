@@ -1,0 +1,20 @@
+make test
+time ./grid_init -dx 0.1 -l ../data/lig.pqrs -p ../data/prot.pqrs
+66 atoms in ../data/lig.pqrs
+232 atoms in ../data/prot.pqrs
+4 anums in ../data/lig.pqrs
+l_a: 1
+Grid.create: nx,ny,nz=153,405,210
+l_a: 6
+Grid.create: nx,ny,nz=153,405,210
+l_a: 7
+Grid.create: nx,ny,nz=153,405,210
+l_a: 8
+Grid.create: nx,ny,nz=153,405,210
+creating ../data/lig.pqrs.1
+creating ../data/lig.pqrs.6
+creating ../data/lig.pqrs.7
+creating ../data/lig.pqrs.8
+ (each is 52050728 bytes long)
+90.34user 0.08system 1:30.42elapsed 99%CPU (0avgtext+0avgdata 259760maxresident)k
+0inputs+406656outputs (0major+4901minor)pagefaults 0swaps

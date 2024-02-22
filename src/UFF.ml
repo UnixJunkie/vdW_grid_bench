@@ -5,7 +5,6 @@
  * UFF, a Full Periodic Table Force Field for Molecular Mechanics and
  * Molecular Dynamics Simulations *)
 
-module IMap = BatMap.Int
 
 let anum_xi_Di = (* currently supported elements *)
   [|( 0, (0.0  , 0.0  )); (* virtual chemical element w/o vdW interactions *)

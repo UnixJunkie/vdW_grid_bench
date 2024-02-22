@@ -2,13 +2,10 @@
  * Tsuda laboratory, The University of Tokyo,
  * 5-1-5 Kashiwa-no-ha, Kashiwa-shi, Chiba-ken, 277-8561, Japan. *)
 
-module A = BatArray
-module BA = BatBigarray
+module A = Array
+module BA = Bigarray
 module BA3 = BA.Array3
-module CLI = Minicli.CLI
-module L = BatList
-module LO = Line_oriented
-module Log = Dolog.Log
+module L = List
 
 open Printf
 
@@ -48,17 +45,22 @@ module Grid = struct
     let nx = int_of_float (ceil (dx /. step)) in
     let ny = int_of_float (ceil (dy /. step)) in
     let nz = int_of_float (ceil (dz /. step)) in
-    Log.info "Grid.create: nx,ny,nz=%d,%d,%d" nx ny nz;
+    Printf.printf "Grid.create: nx,ny,nz=%d,%d,%d\n" nx ny nz;
     let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
     (* init w/ 0s *)
     BA3.fill grid 0.0;
     { low; high; step; nx; ny; nz; grid }
 
   let to_file (fn: string) (x: t): unit =
-    LO.save fn x
+    let c = open_out fn in
+    match Marshal.to_channel c x [Marshal.No_sharing] with
+    | exception e -> close_out c; raise e
+    | _ -> close_out c
 
+   (*
   let from_file (fn: string): t =
     LO.restore fn
+  *)
 
   (* initialize g.grid as a vdW interaction grid for ligand atomic number [l_a]
      WARNING: this code needs to go fast, because the grid might be big
@@ -95,7 +97,16 @@ end
 
 (* parse pqrs file only made of atom lines *)
 let read_prot_pqrs_file_no_header fn =
-  let lines = LO.lines_of_file fn in
+  let lines = 
+    let c = open_in fn in
+    let rec loop acc = 
+      match In_channel.input_line c with
+      | Some s -> loop (s::acc) 
+      | None -> List.rev acc
+    in match loop [] with
+    | exception e -> close_in c; raise e
+    | l -> close_in c; l
+  in
   let num_atoms = L.length lines in
   let mol = Mol.create fn num_atoms in
   L.iteri (fun i line ->
@@ -110,27 +121,34 @@ let read_prot_pqrs_file_no_header fn =
   mol
 
 let main () =
-  Log.(set_log_level INFO);
-  Log.color_on ();
-  Log.(set_prefix_builder short_prefix_builder);
-  let argc, args = CLI.init () in
-  if argc = 1 then
-    (eprintf "usage:\n  \
+  let _verbose = ref false in
+  let lig_fn = ref "" in
+  let prot_fn = ref "" in
+  let step = ref 0.0 in
+  let _nprocs = ref 1 in
+  let speclist = 
+    [("-verbose", Arg.Set _verbose, "Output debug information");
+      ("-l", Arg.Set_string lig_fn, "ligand <FILE.pqrs>");
+      ("-p", Arg.Set_string prot_fn, "protein <FILE.pqrs>");
+      ("-dx", Arg.Set_float step, "grid step");
+      ("-np", Arg.Set_int _nprocs, "nprocs (default=1)");] in
+  let () = Arg.parse speclist (fun _ -> failwith "unexpected extra args")
+    "usage:\n  \
               %s\n  \
               -l <FILE.pqrs>: ligand\n  \
               -p <FILE.pqrs>: protein\n  \
               -dx <float>: grid step\n  \
               [-np <int>]: nprocs (default=1)\n  \
               [-v]: verbose/debug mode\n"
-       Sys.argv.(0);
-     exit 1);
-  let _verbose = CLI.get_set_bool ["-v"] args in
-  let lig_fn = CLI.get_string ["-l"] args in
-  let prot_fn = CLI.get_string ["-p"] args in
-  let step = CLI.get_float_def ["-dx"] args 0.2 in
-  assert(step > 0.01); (* because of non_zero_dist *)
-  let _nprocs = CLI.get_int_def ["-np"] args 1 in
-  CLI.finalize ();
+  in
+  let lig_fn = !lig_fn in
+  let prot_fn = !prot_fn in
+  let step = 
+    if !step = 0.0 then 0.2 else
+    (assert(!step > 0.01); (* because of non_zero_dist *)
+     !step)
+  in
+  let _nprocs = !_nprocs in
   (* END CLI parsing ------------------------------------------------------- *)
   let lig = Mol.first_ligand_of_pqrs_file lig_fn in
   let prot = read_prot_pqrs_file_no_header prot_fn in
@@ -139,26 +157,26 @@ let main () =
   let z_min, z_max = Mol.z_min_max prot in
   let low_corner = V3.make x_min y_min z_min in
   let high_corner = V3.make x_max y_max z_max in
-  Log.info "%d atoms in %s" (Mol.num_atoms lig)  lig_fn;
-  Log.info "%d atoms in %s" (Mol.num_atoms prot) prot_fn;
+  Printf.printf "%d atoms in %s\n" (Mol.num_atoms lig)  lig_fn;
+  Printf.printf "%d atoms in %s\n" (Mol.num_atoms prot) prot_fn;
   let lig_anums =
     let anums = A.to_list (Mol.get_anums lig) in
-    L.sort_uniq BatInt.compare anums in
-  Log.info "%d anums in %s" (L.length lig_anums) lig_fn;
+    L.sort_uniq Int.compare anums in
+  Printf.printf "%d anums in %s\n" (L.length lig_anums) lig_fn;
   let prot_coords = Mol.get_all_atom_coords prot in
   let prot_anums = Mol.get_anums prot in  
   let vdW_prot_atoms = A.combine prot_coords prot_anums in
   (* initialize all vdW grids *)
   let vdW_grids =
     L.map (fun l_a ->
-        Log.info "l_a: %d" l_a;
+        Printf.printf "l_a: %d\n" l_a;
         let g = Grid.create step low_corner high_corner in
         (l_a, Grid.vdW_grid g vdW_prot_atoms l_a)
       ) lig_anums in
   (* dump to disk *)
   L.iter (fun (l_a, g) ->
-      let fn = sprintf "%s.%d" lig_fn l_a in
-      Log.info "creating %s" fn;
+      let fn = sprintf "%s.%d\n" lig_fn l_a in
+      Printf.printf "creating %s" fn;
       Grid.to_file fn g
     ) vdW_grids
 

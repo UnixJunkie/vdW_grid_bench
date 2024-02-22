@@ -2,13 +2,7 @@
  * Tsuda laboratory, The University of Tokyo,
  * 5-1-5 Kashiwa-no-ha, Kashiwa-shi, Chiba-ken, 277-8561, Japan. *)
 
-module A = BatArray
-module FSet = BatSet.Float
-module Ht = BatHashtbl
-module ISet = BatSet.Int
-module L = BatList
-module Log = Dolog.Log
-module LO = Line_oriented
+module A = Array
 
 type t = { xs: float array; (* atoms X coords *)
            ys: float array; (* atoms Y coords *)
@@ -54,23 +48,31 @@ let get_all_atom_coords m: V3.t array =
 let get_anums m: int array =
   m.elt_a
 
+let min_max : float array -> float * float =
+   A.fold_left (fun (mn,mx) x -> ((if x < mn then x else mn), 
+                                  (if x > mx then x else mx)))
+    (max_float,min_float)
+
+let favg : float array -> float = fun a ->
+  Array.fold_left (+.) 0. a /. float_of_int (Array.length a)
+
 let x_min_max m: float * float =
-  A.min_max m.xs
+  min_max m.xs
 
 let y_min_max m: float * float =
-  A.min_max m.ys
+  min_max m.ys
 
 let z_min_max m: float * float =
-  A.min_max m.zs
+  min_max m.zs
 
 (* mean_xyz *)
 let get_center m: V3.t =
   m.center
 
 let update_center m =
-  m.center <- V3.{ x = A.favg m.xs ;
-                   y = A.favg m.ys ;
-                   z = A.favg m.zs }
+  m.center <- V3.{ x = favg m.xs ;
+                   y = favg m.ys ;
+                   z = favg m.zs }
 
 (* only up to atom coordinates; a ligand's pqrs file will contain
    additional info *)
@@ -95,4 +97,7 @@ let ligand_pqrs_read_one input =
   mol
 
 let first_ligand_of_pqrs_file (fn: string): t =
-  LO.with_in_file fn ligand_pqrs_read_one
+  let c = open_in fn in
+  match ligand_pqrs_read_one c with
+  | exception e -> close_in c; raise e
+  | r -> close_in c; r
