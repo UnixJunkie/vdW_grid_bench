@@ -1,0 +1,20 @@
+opam-version: "2.0"
+authors: "Francois Berenger"
+maintainer: "unixjunkie@sdf.org"
+homepage: "https://github.com/UnixJunkie/vdW_grid_bench"
+bug-reports: "https://github.com/UnixJunkie/vdW_grid_bench/issues"
+dev-repo: "git+https://github.com/UnixJunkie/vdW_grid_bench.git"
+license: "BSD-3-Clause"
+build: ["dune" "build" "-p" name "-j" jobs]
+depends: [
+  "batteries" {>= "3.5.0"}
+  "dolog" {>= "5.0.0"}
+  "dune" {>= "1.11"}
+  "line_oriented"
+  "minicli" {>= "5.0.0"}
+  "ocaml" {>= "5.1.0"}
+  "parany" {>= "14.0.0"}
+  "vector3"
+  "base-bigarray"
+]
+synopsis: "Van der Waals 3D grid initialization benchmark"

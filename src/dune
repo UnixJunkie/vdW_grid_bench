@@ -1,0 +1,7 @@
+;; installed executables / public targets
+(executables
+  (names grid_init)
+  (public_names grid_init)
+  (modules mol pqrs ptable UFF V3 grid_init)
+  (libraries batteries dolog minicli vector3
+             line_oriented bigarray unix parany))
