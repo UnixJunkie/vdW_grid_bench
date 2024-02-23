@@ -121,20 +121,21 @@ module Grid = struct
               if discretization step is small and/or protein is big *)
   let vdW_grid (nx,ny,nz) (x_min, y_min, z_min) dx prot_vec =
     let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
+    let x = ref x_min in
     for i = 0 to nx - 1 do
-      let x = x_min +. (float i) *. dx in
+      let y = ref y_min in
       for j = 0 to ny - 1 do
-        let y = y_min +. (float j) *. dx in
+        let z = ref z_min in
         for k = 0 to nz - 1 do
-          let z = z_min +. (float k) *. dx in
-          let l_p = V3.make x y z in (* ligand atom position *)
+          let l_p = V3.make !x !y !z in (* ligand atom position *)
           vec_map (fun ((x,y,z),(x_ij,d_ij)) ->
             let r_ij = non_zero_dist (V3.dist l_p (V3.make x y z)) in
             let p6 = pow6 (x_ij /. r_ij) in
             (d_ij *. ((-2.0 *. p6) +. (p6 *. p6)))) prot_vec
-           |> reducer_present 0.0 (+.) |> BA3.unsafe_set grid i j k
-        done
-      done
+           |> reducer_present 0.0 (+.) |> BA3.unsafe_set grid i j k;
+        z := !z +. dx
+        done; y := !y +. dx
+      done; x := !x +. dx
     done;
     grid
 
