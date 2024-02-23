@@ -57,6 +57,24 @@ let reducer_present : (int,float) reducer = fun z f ->
    done; !acc
 
 
+let prot_vec_memo : (int,(float*float*float)*(float*float)) vec ->
+   (int,(float*float*float)*(float*float)) vec =
+   function Vec (n,ix) ->
+   let arr =
+   List.init n (fun i ->
+   let ((x,y,z),(xi,di)) = ix i in
+   Float.Array.of_list [x;y;z;xi;di]) |> Float.Array.concat 
+   in
+   Vec (n, fun i' ->
+   let i = 5*i' in
+   let x = Float.Array.unsafe_get arr i in
+   let y = Float.Array.unsafe_get arr (i+1) in
+   let z = Float.Array.unsafe_get arr (i+2) in
+   let xi = Float.Array.unsafe_get arr (i+3) in
+   let di = Float.Array.unsafe_get arr (i+4) in
+   ((x,y,z),(xi,di))
+   )
+
 module Grid = struct
 
   type t = {
@@ -103,7 +121,6 @@ module Grid = struct
               if discretization step is small and/or protein is big *)
   let vdW_grid (nx,ny,nz) (x_min, y_min, z_min) dx prot_vec =
     let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
-    BA3.fill grid 0.0;
     for i = 0 to nx - 1 do
       let x = x_min +. (float i) *. dx in
       for j = 0 to ny - 1 do
@@ -206,24 +223,16 @@ let main () =
   Printf.printf "%d anums in %s\n" (L.length lig_anums) lig_fn;
   let prot_coords = Mol.get_all_atom_coords prot in
   let prot_anums = Mol.get_anums prot in  
-  let vdW_prot_atoms = A.combine prot_coords prot_anums in
   (* initialize all vdW grids *)
   let vdW_grids =
     L.map (fun l_a ->
         Printf.printf "l_a: %d\n" l_a;
-        (* this could be automated *)
-        let atom_params =
-          L.map2 (fun p_p p_a ->
-            let x, y, z = V3.to_triplet p_p in
-            let vdw = UFF.vdW_xiDi l_a p_a in
-            Float.Array.of_list [x;y;z;vdw.x_ij;vdw.d_ij])
-          (A.to_list prot_coords)
-          (A.to_list prot_anums) |> Float.Array.concat in
         let prot_vec = 
           Vec (Mol.num_atoms prot,
                fun i -> ((prot_coords.(i) |> V3.to_triplet),
                          let vdw = UFF.vdW_xiDi l_a prot_anums.(i) in
                          (vdw.x_ij,vdw.d_ij)))
+        |> prot_vec_memo
         in
         (l_a,
         Grid.create step low_corner high_corner prot_vec)
