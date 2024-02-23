@@ -36,20 +36,6 @@ module Grid = struct
     (* data *)
     grid: (float, BA.float32_elt, BA.c_layout) BA3.t }
 
-  let create step low high =
-    let x_min, y_min, z_min = V3.to_triplet low  in
-    let x_max, y_max, z_max = V3.to_triplet high in
-    let dx = x_max -. x_min in
-    let dy = y_max -. y_min in
-    let dz = z_max -. z_min in
-    let nx = int_of_float (ceil (dx /. step)) in
-    let ny = int_of_float (ceil (dy /. step)) in
-    let nz = int_of_float (ceil (dz /. step)) in
-    Printf.printf "Grid.create: nx,ny,nz=%d,%d,%d\n" nx ny nz;
-    let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
-    (* init w/ 0s *)
-    BA3.fill grid 0.0;
-    { low; high; step; nx; ny; nz; grid }
 
   (* To confirm that different versions of code in fact produce the same
      grid (or, at least, seemingly the same to some degree)
@@ -80,15 +66,15 @@ module Grid = struct
   (* initialize g.grid as a vdW interaction grid for ligand atomic number [l_a]
      WARNING: this code needs to go fast, because the grid might be big
               if discretization step is small and/or protein is big *)
-  let vdW_grid g prot_atoms l_a =
-    let x_min, y_min, z_min = V3.to_triplet g.low in
-    let dx = g.step in
+  let vdW_grid (nx,ny,nz) (x_min, y_min, z_min) dx prot_atoms l_a =
+    let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
+    BA3.fill grid 0.0;
     let n = A.length prot_atoms in
-    for i = 0 to g.nx - 1 do
+    for i = 0 to nx - 1 do
       let x = x_min +. (float i) *. dx in
-      for j = 0 to g.ny - 1 do
+      for j = 0 to ny - 1 do
         let y = y_min +. (float j) *. dx in
-        for k = 0 to g.nz - 1 do
+        for k = 0 to nz - 1 do
           let z = z_min +. (float k) *. dx in
           let l_p = V3.make x y z in (* ligand atom position *)
           for m = 0 to n - 1 do (* over all protein atoms *)
@@ -99,15 +85,28 @@ module Grid = struct
             (* g.grid.{i,j,k} <-
                g.grid.{i,j,k} +.
                (vdw.d_ij *. ((-2.0 *. p6) +. (p6 *. p6))) *)
-            BA3.unsafe_set g.grid i j k
-              (BA3.unsafe_get g.grid i j k +.
+            BA3.unsafe_set grid i j k
+              (BA3.unsafe_get grid i j k +.
                (vdw.d_ij *. ((-2.0 *. p6) +. (p6 *. p6))))
           done
         done
       done
     done;
-    g (* for more functional programming style *)
+    grid
 
+  let create step low high prot_atoms l_a =
+    let x_min, y_min, z_min = V3.to_triplet low  in
+    let x_max, y_max, z_max = V3.to_triplet high in
+    let dx = x_max -. x_min in
+    let dy = y_max -. y_min in
+    let dz = z_max -. z_min in
+    let nx = int_of_float (ceil (dx /. step)) in
+    let ny = int_of_float (ceil (dy /. step)) in
+    let nz = int_of_float (ceil (dz /. step)) in
+    Printf.printf "Grid.create: nx,ny,nz=%d,%d,%d\n" nx ny nz;
+    { low; high; step; nx; ny; nz; 
+      grid=
+      vdW_grid (nx,ny,nz) (x_min,y_min,z_min) step prot_atoms l_a}
 end
 
 (* parse pqrs file only made of atom lines *)
@@ -185,8 +184,8 @@ let main () =
   let vdW_grids =
     L.map (fun l_a ->
         Printf.printf "l_a: %d\n" l_a;
-        let g = Grid.create step low_corner high_corner in
-        (l_a, Grid.vdW_grid g vdW_prot_atoms l_a)
+        (l_a,
+        Grid.create step low_corner high_corner vdW_prot_atoms l_a)
       ) lig_anums in
   (* dump to disk *)
   L.iter (fun (l_a, g) ->
