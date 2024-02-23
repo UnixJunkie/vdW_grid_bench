@@ -1,9 +1,9 @@
 
 %.cmx : %.ml
-	ocamlopt -c $^
+	metaocamlopt -c $^
 
 grid_init: pqrs.cmx V3.cmx ptable.cmx UFF.cmx mol.cmx grid_init.cmx
-	ocamlopt -o $@ $^
+	metaocamlopt -o $@ $^
 
 
 test: grid_init

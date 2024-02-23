@@ -67,3 +67,27 @@ creating ../data/lig.pqrs.8
 Prepared grid: fingerprint 6.3766385449231183e+29
 90.11user 0.00system 1:30.12elapsed 100%CPU (0avgtext+0avgdata 208824maxresident)k
 0inputs+0outputs (0major+2552minor)pagefaults 0swaps
+
+
+Introducing prot_vec (no memoization)
+66 atoms in ../data/lig.pqrs
+232 atoms in ../data/prot.pqrs
+4 anums in ../data/lig.pqrs
+l_a: 1
+Grid.create: nx,ny,nz=153,405,210
+l_a: 6
+Grid.create: nx,ny,nz=153,405,210
+l_a: 7
+Grid.create: nx,ny,nz=153,405,210
+l_a: 8
+Grid.create: nx,ny,nz=153,405,210
+creating ../data/lig.pqrs.1
+Prepared grid: fingerprint 1.716375069978495e+29
+creating ../data/lig.pqrs.6
+Prepared grid: fingerprint 1.496730670706502e+30
+creating ../data/lig.pqrs.7
+Prepared grid: fingerprint 8.9416765066301818e+29
+creating ../data/lig.pqrs.8
+Prepared grid: fingerprint 6.3766385449231183e+29
+198.72user 0.01system 3:18.74elapsed 99%CPU (0avgtext+0avgdata 218004maxresident)k
+0inputs+0outputs (0major+3746minor)pagefaults 0swaps

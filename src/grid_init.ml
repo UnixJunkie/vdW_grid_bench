@@ -22,6 +22,41 @@ let non_zero_dist x =
   else
     x
 
+(* A generic vector: pull vector *)
+type ('i,'a) vec = Vec of 'i *     (* exclusive upper bound for the index *)
+                          ('i -> 'a)
+
+(* An element-wise operation on a single vector *)
+let vec_map : ('a -> 'b) -> ('i,'a) vec -> ('i,'b) vec =
+ fun tf (Vec (n, f)) -> Vec (n, fun i -> tf (f i))
+(* An element-wise binary vector operation *)
+(* bounds should be physically equal
+   (If they were not, one should have reconciled them first, or
+   rolled into a element mapping)
+*)
+let zip_with : ('a -> 'b ->'c) -> ('i,'a) vec -> ('i,'b) vec -> ('i,'c) vec = 
+  fun tf (Vec (n1,f1)) (Vec (n2,f2)) -> 
+    assert( n1 == n2 );
+    Vec (n1, fun i -> tf (f1 i) (f2 i))
+
+type ('i,'a) reducer = 'a -> ('a -> 'a -> 'a) -> ('i,'a) vec -> 'a
+
+let reducer_dyn : ('i code,'a code) reducer = fun z f -> 
+  function Vec (upe,ix) ->
+  .<let acc = ref .~z in 
+    for i = 0 to .~upe-1 do
+     acc := .~(f .<!acc>. (ix .<i>.))
+   done; !acc>. 
+
+
+let reducer_present : (int,float) reducer = fun z f ->
+  function Vec (upe,ix) ->
+  let acc = ref z in 
+    for i = 0 to upe-1 do
+     acc := f !acc (ix i)
+   done; !acc
+
+
 module Grid = struct
 
   type t = {
@@ -66,10 +101,9 @@ module Grid = struct
   (* initialize g.grid as a vdW interaction grid for ligand atomic number [l_a]
      WARNING: this code needs to go fast, because the grid might be big
               if discretization step is small and/or protein is big *)
-  let vdW_grid (nx,ny,nz) (x_min, y_min, z_min) dx prot_atoms l_a =
+  let vdW_grid (nx,ny,nz) (x_min, y_min, z_min) dx prot_vec =
     let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
     BA3.fill grid 0.0;
-    let n = A.length prot_atoms in
     for i = 0 to nx - 1 do
       let x = x_min +. (float i) *. dx in
       for j = 0 to ny - 1 do
@@ -77,24 +111,17 @@ module Grid = struct
         for k = 0 to nz - 1 do
           let z = z_min +. (float k) *. dx in
           let l_p = V3.make x y z in (* ligand atom position *)
-          for m = 0 to n - 1 do (* over all protein atoms *)
-            let p_p, p_a = A.unsafe_get prot_atoms m in
-            let r_ij = non_zero_dist (V3.dist l_p p_p) in
-            let vdw = UFF.vdW_xiDi l_a p_a in
-            let p6 = pow6 (vdw.x_ij /. r_ij) in
-            (* g.grid.{i,j,k} <-
-               g.grid.{i,j,k} +.
-               (vdw.d_ij *. ((-2.0 *. p6) +. (p6 *. p6))) *)
-            BA3.unsafe_set grid i j k
-              (BA3.unsafe_get grid i j k +.
-               (vdw.d_ij *. ((-2.0 *. p6) +. (p6 *. p6))))
-          done
+          vec_map (fun ((x,y,z),(x_ij,d_ij)) ->
+            let r_ij = non_zero_dist (V3.dist l_p (V3.make x y z)) in
+            let p6 = pow6 (x_ij /. r_ij) in
+            (d_ij *. ((-2.0 *. p6) +. (p6 *. p6)))) prot_vec
+           |> reducer_present 0.0 (+.) |> BA3.unsafe_set grid i j k
         done
       done
     done;
     grid
 
-  let create step low high prot_atoms l_a =
+  let create step low high prot_vec =
     let x_min, y_min, z_min = V3.to_triplet low  in
     let x_max, y_max, z_max = V3.to_triplet high in
     let dx = x_max -. x_min in
@@ -106,7 +133,7 @@ module Grid = struct
     Printf.printf "Grid.create: nx,ny,nz=%d,%d,%d\n" nx ny nz;
     { low; high; step; nx; ny; nz; 
       grid=
-      vdW_grid (nx,ny,nz) (x_min,y_min,z_min) step prot_atoms l_a}
+      vdW_grid (nx,ny,nz) (x_min,y_min,z_min) step prot_vec}
 end
 
 (* parse pqrs file only made of atom lines *)
@@ -184,8 +211,22 @@ let main () =
   let vdW_grids =
     L.map (fun l_a ->
         Printf.printf "l_a: %d\n" l_a;
+        (* this could be automated *)
+        let atom_params =
+          L.map2 (fun p_p p_a ->
+            let x, y, z = V3.to_triplet p_p in
+            let vdw = UFF.vdW_xiDi l_a p_a in
+            Float.Array.of_list [x;y;z;vdw.x_ij;vdw.d_ij])
+          (A.to_list prot_coords)
+          (A.to_list prot_anums) |> Float.Array.concat in
+        let prot_vec = 
+          Vec (Mol.num_atoms prot,
+               fun i -> ((prot_coords.(i) |> V3.to_triplet),
+                         let vdw = UFF.vdW_xiDi l_a prot_anums.(i) in
+                         (vdw.x_ij,vdw.d_ij)))
+        in
         (l_a,
-        Grid.create step low_corner high_corner vdW_prot_atoms l_a)
+        Grid.create step low_corner high_corner prot_vec)
       ) lig_anums in
   (* dump to disk *)
   L.iter (fun (l_a, g) ->
