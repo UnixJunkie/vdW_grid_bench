@@ -3,7 +3,7 @@
 	metaocamlopt -c $^
 
 grid_init: pqrs.cmx V3.cmx ptable.cmx UFF.cmx mol.cmx grid_init.cmx
-	metaocamlopt -o $@ $^
+	metaocamlopt -o $@ lifts.cmx $^ 
 
 
 test: grid_init
