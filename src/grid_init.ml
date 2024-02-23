@@ -51,11 +51,26 @@ module Grid = struct
     BA3.fill grid 0.0;
     { low; high; step; nx; ny; nz; grid }
 
+  (* To confirm that different versions of code in fact produce the same
+     grid (or, at least, seemingly the same to some degree)
+  *)
+  let fingerprint {grid;nx;ny;nz} : float =
+    let size = nx * ny * nz in
+    let m1 = BA.(reshape_1 (genarray_of_array3 grid) size) in
+    let sum = ref 0.0 in
+    for i = 0 to size -1 do sum := !sum +. BA.Array1.get m1 i done;
+    !sum
+
+  (* The real code
   let to_file (fn: string) (x: t): unit =
     let c = open_out fn in
     match Marshal.to_channel c x [Marshal.No_sharing] with
     | exception e -> close_out c; raise e
     | _ -> close_out c
+ *)
+  (* Used for benchmarking *)
+  let to_file (fn: string) (x: t): unit =
+    Printf.printf "Prepared grid: fingerprint %.17g\n" (fingerprint x)
 
    (*
   let from_file (fn: string): t =
