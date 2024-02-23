@@ -121,6 +121,9 @@ module Grid = struct
               if discretization step is small and/or protein is big *)
   let vdW_grid (nx,ny,nz) (x_min, y_min, z_min) dx prot_vec =
     let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
+    let size = nx * ny * nz in
+    let m1 = BA.(reshape_1 (genarray_of_array3 grid) size) in
+    let ix = ref 0 in
     let x = ref x_min in
     for i = 0 to nx - 1 do
       let y = ref y_min in
@@ -132,7 +135,8 @@ module Grid = struct
             let r_ij = non_zero_dist (V3.dist l_p (V3.make x y z)) in
             let p6 = pow6 (x_ij /. r_ij) in
             (d_ij *. ((-2.0 *. p6) +. (p6 *. p6)))) prot_vec
-           |> reducer_present 0.0 (+.) |> BA3.unsafe_set grid i j k;
+           |> reducer_present 0.0 (+.) |> BA.Array1.unsafe_set m1 !ix;
+        incr ix;
         z := !z +. dx
         done; y := !y +. dx
       done; x := !x +. dx
