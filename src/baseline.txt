@@ -140,9 +140,8 @@ Prepared grid: fingerprint 6.3766385449231183e+29
 176.66user 0.01system 2:56.68elapsed 99%CPU (0avgtext+0avgdata 218016maxresident)k
 0inputs+0outputs (0major+3682minor)pagefaults 0swaps
 
-Finally, first attempt of run-time code generation and staging
-The time below includes the time of ocamlopt compiling of the
-generated code
+Code generation: the output
+metaocamlopt -c grid_init.ml
 metaocamlopt -o grid_init lifts.cmx pqrs.cmx V3.cmx ptable.cmx UFF.cmx mol.cmx grid_init.cmx 
 time ./grid_init -dx 0.1 -l ../data/lig.pqrs -p ../data/prot.pqrs
 66 atoms in ../data/lig.pqrs
@@ -150,19 +149,83 @@ time ./grid_init -dx 0.1 -l ../data/lig.pqrs -p ../data/prot.pqrs
 4 anums in ../data/lig.pqrs
 l_a: 1
 Grid.create: nx,ny,nz=153,405,210
+generating code took 7.7e-05 sec
+.<
+fun (n_1, prot_2) ->
+  let grid_3 =
+    Stdlib.Bigarray.Array3.create Stdlib.Bigarray.float32
+      Stdlib.Bigarray.c_layout 153 405 210 in
+  let size_4 = (153 * 405) * 210 in
+  let m1_5 =
+    Stdlib.Bigarray.reshape_1 (Stdlib.Bigarray.genarray_of_array3 grid_3)
+      size_4 in
+  let ix_6 = Stdlib.ref 0 in
+  let x_7 = Stdlib.ref (-9.4450000000000003) in
+  for i_8 = 0 to 153 - 1 do
+    (let y_9 = Stdlib.ref (-40.415999999999997) in
+     for j_10 = 0 to 405 - 1 do
+       (let z_11 = Stdlib.ref 11.323399999999999 in
+        for k_12 = 0 to 210 - 1 do
+          (Stdlib.Bigarray.Array1.unsafe_set m1_5 (! ix_6)
+             (let acc_13 = Stdlib.ref 0. in
+              for i_14 = 0 to n_1 - 1 do
+                (let t_15 = 5 * i_14 in
+                 let t_23 =
+                   let t_20 =
+                     (Stdlib.Float.Array.unsafe_get prot_2 (t_15 + 3)) /.
+                       (let t_19 =
+                          Stdlib.sqrt
+                            (((let t_18 =
+                                 (! x_7) -.
+                                   (Stdlib.Float.Array.unsafe_get prot_2 t_15) in
+                               t_18 *. t_18) +.
+                                (let t_17 =
+                                   (! y_9) -.
+                                     (Stdlib.Float.Array.unsafe_get prot_2
+                                        (t_15 + 1)) in
+                                 t_17 *. t_17))
+                               +.
+                               (let t_16 =
+                                  (! z_11) -.
+                                    (Stdlib.Float.Array.unsafe_get prot_2
+                                       (t_15 + 2)) in
+                                t_16 *. t_16)) in
+                        if t_19 < 0.01 then 0.01 else t_19) in
+                   let t_21 = t_20 *. t_20 in
+                   let t_22 = (t_21 *. t_21) *. t_21 in t_22 in
+                 acc_13 :=
+                   ((! acc_13) +.
+                      ((Stdlib.Float.Array.unsafe_get prot_2 (t_15 + 4)) *.
+                         (((-2.0) *. t_23) +. (t_23 *. t_23)))))
+              done;
+              ! acc_13);
+           Stdlib.incr ix_6;
+           z_11 := ((! z_11) +. 0.10000000000000001))
+        done;
+        y_9 := ((! y_9) +. 0.10000000000000001))
+     done;
+     x_7 := ((! x_7) +. 0.10000000000000001))
+  done;
+  grid_3>.compiling generated code took 0.000787 sec
 l_a: 6
 Grid.create: nx,ny,nz=153,405,210
+Reusing the memoized grid filling code
 l_a: 7
 Grid.create: nx,ny,nz=153,405,210
+Reusing the memoized grid filling code
 l_a: 8
 Grid.create: nx,ny,nz=153,405,210
+Reusing the memoized grid filling code
 creating ../data/lig.pqrs.1
-Prepared grid: fingerprint 1.878387752536875e+29
+Prepared grid: fingerprint 1.716375069978495e+29
 creating ../data/lig.pqrs.6
-Prepared grid: fingerprint 1.6380105776899461e+30
+Prepared grid: fingerprint 1.496730670706502e+30
 creating ../data/lig.pqrs.7
-Prepared grid: fingerprint 9.7857020457989245e+29
+Prepared grid: fingerprint 8.9416765066301818e+29
 creating ../data/lig.pqrs.8
-Prepared grid: fingerprint 6.9785443877272887e+29
-96.35user 0.06system 1:36.52elapsed 99%CPU (0avgtext+0avgdata 217800maxresident)k
-40inputs+1120outputs (1major+26032minor)pagefaults 0swaps
+Prepared grid: fingerprint 6.3766385449231183e+29
+
+42.97user 0.02system 0:43.00elapsed 99%CPU (0avgtext+0avgdata 216996maxresident)k
+0inputs+128outputs (1major+9204minor)pagefaults 0swaps
+
+Compilation finished at Sat Feb 24 20:05:02

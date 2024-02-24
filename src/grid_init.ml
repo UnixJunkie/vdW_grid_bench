@@ -41,6 +41,13 @@ let zip_with : ('a -> 'b ->'c) -> ('i,'a) vec -> ('i,'b) vec -> ('i,'c) vec =
 
 type ('i,'a) reducer = 'a -> ('a -> 'a -> 'a) -> ('i,'a) vec -> 'a
 
+let reducer_present : (int,'a) reducer = fun z f ->
+  function Vec (upe,ix) ->
+  let acc = ref z in 
+    for i = 0 to upe-1 do
+     acc := f !acc (ix i)
+   done; !acc
+
 let reducer_dyn : ('i code,'a code) reducer = fun z f -> 
   function Vec (upe,ix) ->
   .<let acc = ref .~z in 
@@ -48,58 +55,47 @@ let reducer_dyn : ('i code,'a code) reducer = fun z f ->
      acc := .~(f .<!acc>. (ix .<i>.))
    done; !acc>. 
 
+(* Tabulating and memoizing the vector of parameters (protein number
+   positions and LJ parameters with respect to the given ligand)
+*)
 
-let reducer_present : (int,float) reducer = fun z f ->
-  function Vec (upe,ix) ->
-  let acc = ref z in 
-    for i = 0 to upe-1 do
-     acc := f !acc (ix i)
-   done; !acc
+let prot_vec_tabulate : (int,(float*float*float)*(float*float)) vec ->
+  (int * Float.Array.t) = function Vec (n,ix) ->
+    List.init n (fun i ->
+      let ((x,y,z),(xi,di)) = ix i in
+      Float.Array.of_list [x;y;z;xi;di]) 
+    |> Float.Array.concat 
+    |> fun a -> (n,a)
 
+let to_prot_vec : (int * Float.Array.t) -> 
+  (int,(float*float*float)*(float*float)) vec = fun (n,arr) ->
+    Vec (n, fun i' ->
+      let i = 5*i' in
+      let x = Float.Array.unsafe_get arr i in
+      let y = Float.Array.unsafe_get arr (i+1) in
+      let z = Float.Array.unsafe_get arr (i+2) in
+      let xi = Float.Array.unsafe_get arr (i+3) in
+      let di = Float.Array.unsafe_get arr (i+4) in
+      ((x,y,z),(xi,di)))
 
 let prot_vec_memo : (int,(float*float*float)*(float*float)) vec ->
    (int,(float*float*float)*(float*float)) vec =
-   function Vec (n,ix) ->
-   let arr =
-   List.init n (fun i ->
-   let ((x,y,z),(xi,di)) = ix i in
-   Float.Array.of_list [x;y;z;xi;di]) |> Float.Array.concat 
-   in
-   Vec (n, fun i' ->
-   let i = 5*i' in
-   let x = Float.Array.unsafe_get arr i in
-   let y = Float.Array.unsafe_get arr (i+1) in
-   let z = Float.Array.unsafe_get arr (i+2) in
-   let xi = Float.Array.unsafe_get arr (i+3) in
-   let di = Float.Array.unsafe_get arr (i+4) in
-   ((x,y,z),(xi,di))
-   )
+  fun v -> v |> prot_vec_tabulate |> to_prot_vec
 
-let prot_vec_memo_staged : (int,(float*float*float)*(float*float)) vec ->
-   (int code,(float code*float code *float code)*(float code *float code)) vec =
-   function Vec (n,ix) ->
-   let arr =
-   List.init n (fun i ->
-   let ((x,y,z),(xi,di)) = ix i in
-   Array.of_list [x;y;z;xi;di]) |> Array.concat 
-   in
-   let module M = Lifts.Lift_array(Lifts.Lift_float) in
-   let arr_sta = M.lift arr in
-   let arr_get i = .<Array.unsafe_get .~arr_sta .~i>. in
-   Vec (.<n>., fun i' ->
-   let i = genlet .<5* .~i'>. in
-   let x = arr_get i in
-   let y = arr_get  .<.~i+1>. in
-   let z = arr_get  .<.~i+2>. in
-   let xi = arr_get .<.~i+3>. in
-   let di = arr_get .<.~i+4>. in
-   ((x,y,z),(xi,di))
-   )
+let to_prot_vec_staged : (int code * Float.Array.t code) -> 
+  (int code,(float code*float code*float code)*(float code*float code)) vec =
+  fun (n,arr) ->
+    let arr_get i = .<Float.Array.unsafe_get .~arr .~i>. in
+    Vec (n, fun i' ->
+      let i = genlet .<5* .~i'>. in
+      let x = arr_get i in
+      let y = arr_get  .<.~i+1>. in
+      let z = arr_get  .<.~i+2>. in
+      let xi = arr_get .<.~i+3>. in
+      let di = arr_get .<.~i+4>. in
+      ((x,y,z),(xi,di)))
 
-let v3_make_staged : float code -> float code -> float code ->
-   (float code * float code * float code) =
-   fun x y z -> (x,y,z)
-
+(* Make staged code easier to read  *)
 module C = struct
   let zero = .<0.>. 
   let ( +. ) = fun x y -> .<.~x +. .~y>.
@@ -112,18 +108,28 @@ module C = struct
    letl x @@ fun x -> letl (x *. x) @@ fun x -> 
    genlet (x *. x *. x)
   let vec_get : 'a array code -> int code -> 'a code = fun v i ->
-   .< Array.get .~v .~i >.              (* or unsafe_get *)
+   .< Array.unsafe_get .~v .~i >.              (* or unsafe_get *)
   let vec_set : 'a array code -> int code -> 'a code -> unit code = fun v i x ->
-   .< Array.set .~v .~i .~x >.          (* or unsafe_set *)
+   .< Array.unsafe_set .~v .~i .~x >.          (* or unsafe_set *)
 end
+
+let v3_make_staged : float code -> float code -> float code ->
+   (float code * float code * float code) =
+   fun x y z -> (x,y,z)
 
 let v3_dist : (float code * float code * float code) -> 
               (float code * float code * float code) -> float code = 
    fun (v11,v12,v13) (v21,v22,v23) ->
     C.(sqrt (sqr (v11 -. v21) +. sqr (v12 -. v22) +. sqr (v13 -. v23)))
 let non_zero_dist_staged : float code -> float code = fun x ->
-    letl x @@ fun x -> .<if .~x = 0.0 then 0.01 else .~x >.
+    letl x @@ fun x -> .<if .~x < 0.01 then 0.01 else .~x >.
 
+
+let timeit : string -> (unit -> 'a) -> 'a = fun msg thunk ->
+   let tbeg = Sys.time () in
+   let r = thunk () in
+   Printf.printf "%s took %g sec\n" msg (Sys.time () -. tbeg); 
+   r
 
 module Grid = struct
 
@@ -141,7 +147,7 @@ module Grid = struct
 
 
   (* To confirm that different versions of code in fact produce the same
-     grid (or, at least, seemingly the same to some degree)
+     grid (or, at least, seemingly the same to some degree of confidence)
   *)
   let fingerprint {grid;nx;ny;nz} : float =
     let size = nx * ny * nz in
@@ -170,6 +176,7 @@ module Grid = struct
      WARNING: this code needs to go fast, because the grid might be big
               if discretization step is small and/or protein is big *)
   let vdW_grid (nx,ny,nz) (x_min, y_min, z_min) dx prot_vec =
+    let prot_vec = prot_vec_memo prot_vec in
     let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
     let size = nx * ny * nz in
     let m1 = BA.(reshape_1 (genarray_of_array3 grid) size) in
@@ -193,10 +200,12 @@ module Grid = struct
     done;
     grid
 
+  (* specialized to the grid parameters. The prot vector is dynamic *)
+  (* it is deliberately made to be very similar to vdW_grid *)
   let vdW_grid_staged ((nx,ny,nz):(int*int*int)) 
    ((x_min, y_min, z_min):(float*float*float)) (dx:float) prot_vec =
    .<
-    let grid = Bigarray.Array3.create Bigarray.float32 Bigarray.c_layout nx ny nz in
+    let grid = Bigarray.(Array3.create float32 c_layout nx ny nz) in
     let size = nx * ny * nz in
     let m1 = Bigarray.(reshape_1 (genarray_of_array3 grid) size) in
     let ix = ref 0 in
@@ -207,11 +216,12 @@ module Grid = struct
         let z = ref z_min in
         for k = 0 to nz - 1 do
         .~(
-          let l_p = v3_make_staged .<!x>. .<!y>. .<!z>. in (* liganda pos *)
+          let l_p = v3_make_staged .<!x>. .<!y>. .<!z>. in (* ligand at pos *)
           vec_map (fun (p_p,(x_ij,d_ij)) ->
+            let open C in
             let r_ij = non_zero_dist_staged (v3_dist l_p p_p) in
-            let p6 = C.(pow6 (x_ij /. r_ij)) in
-            C.(d_ij *. ((.<-2.0>. *. p6) +. (p6 *. p6)))) prot_vec
+            let p6 = genlet @@ pow6 (x_ij /. r_ij) in
+            d_ij *. ((.<-2.0>. *. p6) +. (p6 *. p6))) prot_vec
            |> reducer_dyn C.zero C.(+.)
            |> fun v -> .<Bigarray.Array1.unsafe_set m1 !ix .~v>.);
         incr ix;
@@ -222,14 +232,30 @@ module Grid = struct
     grid
    >.
 
-  let vdW_grid_gen (nx,ny,nz) (x_min, y_min, z_min) dx prot_vec =
-   let c = vdW_grid_staged (nx,ny,nz) (x_min, y_min, z_min) dx
-   (prot_vec_memo_staged prot_vec) in
-   (*
-   print_code Format.std_formatter c;
-   exit 1
-   *)
-   Runnative.run c
+  (* run-time code generation *)
+  let vdW_grid_gen :
+      (int*int*int) -> (float*float*float) -> float -> (int,_) vec ->
+      _ BA3.t =
+    let memo = ref [] in
+    fun ns mins dx prot_vec ->
+      let prot = prot_vec_tabulate prot_vec in
+      match List.assoc_opt (ns,mins) !memo with
+      | Some f -> 
+          Printf.printf "Reusing the memoized grid filling code\n";
+          f prot
+      | None ->
+          let cde = 
+            timeit "generating code" @@ fun () ->
+            .<fun (n,prot) ->
+              .~(vdW_grid_staged ns mins dx 
+                   (to_prot_vec_staged (.<n>.,.<prot>.)))>.
+            in
+          print_code Format.std_formatter cde;
+          let f = timeit "compiling generated code" @@ fun () ->
+            Runnative.run cde
+          in
+          memo := ((ns,mins),f) :: !memo;
+          f prot
 
   let create step low high prot_vec =
     let x_min, y_min, z_min = V3.to_triplet low  in
@@ -339,7 +365,6 @@ let main () =
                fun i -> ((prot_coords.(i) |> V3.to_triplet),
                          let vdw = UFF.vdW_xiDi l_a prot_anums.(i) in
                          (vdw.x_ij,vdw.d_ij)))
-        |> prot_vec_memo
         in
         (l_a,
         Grid.create_gen step low_corner high_corner prot_vec)
