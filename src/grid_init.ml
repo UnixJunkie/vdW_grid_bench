@@ -28,7 +28,7 @@ let non_zero_dist x =
 module Grid = struct
 
   type t = {
-    (* meta data *) 
+    (* meta data *)
     low: V3.t;
     high: V3.t;
     step: float; (* Cubic grid: dx = dy = dz *)
@@ -73,7 +73,8 @@ module Grid = struct
         let y = y_min +. (float j) *. dx in
         for k = 0 to g.nz - 1 do
           let z = z_min +. (float k) *. dx in
-          let l_p = V3.make x y z in (* ligand atom position *)
+          (* ligand atom position *)
+          let l_p = V3.make x y z in
           let grid_i_j_k = ref (BA3.unsafe_get g.grid i j k) in
           for m = 0 to n - 1 do (* over all protein atoms *)
             let p_p, p_a = A.unsafe_get prot_atoms m in
@@ -148,7 +149,7 @@ let main () =
     L.sort_uniq BatInt.compare anums in
   Log.info "%d anums in %s" (L.length lig_anums) lig_fn;
   let prot_coords = Mol.get_all_atom_coords prot in
-  let prot_anums = Mol.get_anums prot in  
+  let prot_anums = Mol.get_anums prot in
   let vdW_prot_atoms = A.combine prot_coords prot_anums in
   (* initialize all vdW grids *)
   let vdW_grids =
