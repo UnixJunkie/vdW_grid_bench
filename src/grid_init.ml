@@ -25,6 +25,12 @@ let non_zero_dist x =
   else
     x
 
+let non_zero_dist2 x =
+  if x < 0.0001 then
+    0.0001
+  else
+    x
+
 module Grid = struct
 
   type t = {
@@ -78,9 +84,9 @@ module Grid = struct
           let grid_i_j_k = ref (BA3.unsafe_get g.grid i j k) in
           for m = 0 to n - 1 do (* over all protein atoms *)
             let p_p, p_a = A.unsafe_get prot_atoms m in
-            let r_ij = non_zero_dist (V3.dist l_p p_p) in
+            let r_ij2 = non_zero_dist2 (V3.dist2 l_p p_p) in
             let vdw = UFF.vdW_xiDi l_a p_a in
-            let p6 = pow6 (vdw.x_ij /. r_ij) in
+            let p6 = pow3 (vdw.x_ij *. vdw.x_ij /. r_ij2) in
             (* g.grid.{i,j,k} <-
                g.grid.{i,j,k} +.
                (vdw.d_ij *. ((-2.0 *. p6) +. (p6 *. p6))) *)
