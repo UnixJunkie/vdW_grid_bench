@@ -1,7 +1,7 @@
 .PHONY: build install uninstall reinstall test
 
 build:
-	dune build @install -j `getconf _NPROCESSORS_ONLN`
+	dune build @install -j `getconf _NPROCESSORS_ONLN` --profile=release
 
 clean:
 	rm -rf _build
