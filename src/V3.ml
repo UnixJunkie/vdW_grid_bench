@@ -11,16 +11,13 @@ let xyz_dump out v =
 (* [dist2]: squared distance,
    saves one call to sqrt compared to [dist] below *)
 let dist2 u v =
-  (*    dx2 *)
-  (u.x -. v.x) *.
-  (u.x -. v.x)
-  +. (* dy2 *)
-  (u.y -. v.y) *.
-  (u.y -. v.y)
-  +. (* dz2 *)
-  (u.z -. v.z) *.
-  (u.z -. v.z)
+  let dx = u.x -. v.x in
+  let dy = u.y -. v.y in
+  let dz = u.z -. v.z in
+  dx *. dx +. dy *. dy +. dz *. dz
+[@@inline]
 
 (* the one in library vector3 should be optimized *)
 let dist u v =
   sqrt (dist2 u v)
+[@@inline]
