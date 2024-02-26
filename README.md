@@ -19,3 +19,6 @@ real    0m57.384s
 
 # w/ optims in vdW_grid
 real    0m49.096s
+
+# w/ pow3 and V3.dist2 instead of pow6 and V3.dist in vdW_grid
+real    0m41.282s
