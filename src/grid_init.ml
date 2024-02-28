@@ -3,8 +3,6 @@
  * 5-1-5 Kashiwa-no-ha, Kashiwa-shi, Chiba-ken, 277-8561, Japan. *)
 
 module A = BatArray
-module BA = BatBigarray
-module BA3 = BA.Array3
 module CLI = Minicli.CLI
 module L = BatList
 module LO = Line_oriented
@@ -43,7 +41,7 @@ module Grid = struct
     ny: int;
     nz: int;
     (* data *)
-    grid: (float, BA.float32_elt, BA.c_layout) BA3.t }
+    grid: float array array array }
 
   let create step low high =
     let x_min, y_min, z_min = V3.to_triplet low  in
@@ -55,9 +53,11 @@ module Grid = struct
     let ny = int_of_float (ceil (dy /. step)) in
     let nz = int_of_float (ceil (dz /. step)) in
     Log.info "Grid.create: nx,ny,nz=%d,%d,%d" nx ny nz;
-    let grid = BA3.create BA.float32 BA.c_layout nx ny nz in
-    (* init w/ 0s *)
-    BA3.fill grid 0.0;
+    let grid =
+      Array.make nx (
+        Array.make ny (
+          (* init w/ 0s *)
+          Array.make nz 0.0)) in
     { low; high; step; nx; ny; nz; grid }
 
   let to_file (fn: string) (x: t): unit =
@@ -75,13 +75,15 @@ module Grid = struct
     let n = A.length prot_atoms in
     for i = 0 to g.nx - 1 do
       let x = x_min +. (float i) *. dx in
+      let grid_i = A.unsafe_get g.grid i in
       for j = 0 to g.ny - 1 do
         let y = y_min +. (float j) *. dx in
+        let grid_i_j = A.unsafe_get grid_i j in
         for k = 0 to g.nz - 1 do
           let z = z_min +. (float k) *. dx in
+          let grid_i_j_k = ref (A.unsafe_get grid_i_j k) in
           (* ligand atom position *)
           let l_p = V3.make x y z in
-          let grid_i_j_k = ref (BA3.unsafe_get g.grid i j k) in
           for m = 0 to n - 1 do (* over all protein atoms *)
             let p_p, p_a = A.unsafe_get prot_atoms m in
             let r_ij2 = non_zero_dist2 (V3.dist2 l_p p_p) in
@@ -94,7 +96,7 @@ module Grid = struct
               (!grid_i_j_k +.
                (vdw.d_ij *. (p6 *. (p6 -. 2.0))))
           done;
-          BA3.unsafe_set g.grid i j k !grid_i_j_k
+          g.grid.(i).(j).(k) <- !grid_i_j_k
         done
       done
     done;
